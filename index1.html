@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Reorder (Prototype Pattern) — Demo</title>
+  <style>
+    :root { --bg:#f6f7fb; --card:#fff; --muted:#6b7280; --accent:#ff6f61; --green:#16a34a; }
+    body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial; background:var(--bg); margin:0; padding:32px; color:#111;}
+    .container{max-width:980px;margin:0 auto;display:grid;grid-template-columns:1fr 420px;gap:20px;}
+    .card{background:var(--card); border-radius:12px; padding:16px; box-shadow:0 6px 18px rgba(15,23,42,0.06);}
+    h2{margin:0 0 12px 0;font-size:18px;}
+    .order{border:1px solid #eee;border-radius:10px;padding:12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;}
+    .order-info{display:flex;gap:12px;align-items:center;}
+    .shop{font-weight:600;}
+    .items{font-size:13px;color:var(--muted);}
+    button{border:0;padding:8px 12px;border-radius:8px;cursor:pointer;background:var(--accent);color:white;font-weight:600;}
+    .cart-list{max-height:360px;overflow:auto;}
+    .muted{color:var(--muted);font-size:13px;}
+    .pill{background:#f3f4f6;padding:6px 8px;border-radius:999px;font-weight:600;font-size:12px;}
+    .small{font-size:13px;color:var(--muted)}
+    .note{font-style:italic;color:#374151;margin-top:8px}
+    .btn-edit{background:#fff;color:var(--accent);border:1px solid #ffd6d3;padding:6px 10px;border-radius:8px}
+    .success{color:var(--green);font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Left: Past orders (source prototypes) -->
+    <div class="card">
+      <h2>Past Orders (tap Reorder to clone)</h2>
+
+      <div id="pastOrders"></div>
+
+      <p class="muted small">This demo uses a prototype object that implements <code>clone()</code> so each reorder is created from an existing order object (prototype pattern).</p>
+    </div>
+
+    <!-- Right: Cart (cloned target) -->
+    <div class="card">
+      <h2>Your Cart</h2>
+      <div id="cart" class="cart-list">
+        <p class="muted">Cart is empty. Clone a past order to start.</p>
+      </div>
+      <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
+        <div class="small">Total: <span id="total">₹0</span></div>
+        <div><button id="placeOrderBtn" disabled>Place Order</button></div>
+      </div>
+      <p id="message" class="note"></p>
+    </div>
+  </div>
+
+  <script>
+    /*****************************************************************
+     * OrderPrototype
+     *
+     * Implements Prototype pattern: each order object exposes clone().
+     * clone() uses structuredClone when available (modern deep copy).
+     * Fallback to JSON.parse(JSON.stringify(...)) for compatibility.
+     *
+     * (Structured clone is preferred because it can handle more types
+     * than JSON stringify/parse for deep copying nested data.)
+     *****************************************************************/
+    class OrderPrototype {
+      constructor({ id, restaurant, items = [], offer = null, deliveryAddress = '', userNote = '' } = {}) {
+        this.id = id || `order_${Math.random().toString(36).slice(2,9)}`;
+        this.restaurant = restaurant;
+        this.items = items; // array of {name, qty, price}
+        this.offer = offer; // e.g. {code, discount}
+        this.deliveryAddress = deliveryAddress;
+        this.userNote = userNote;
+        this.createdAt = new Date().toISOString();
+      }
+
+      // clone: deep-copy this order and return a new OrderPrototype instance
+      clone() {
+        // Use structuredClone when available (robust deep copy)
+        let data;
+        if (typeof structuredClone === 'function') {
+          // modern browsers
+          data = structuredClone(this);
+        } else {
+          // fallback (note: loses non-JSON types)
+          data = JSON.parse(JSON.stringify(this));
+        }
+        // create new instance (reset id / createdAt so it's clearly a new order)
+        const { id, createdAt, ...rest } = data;
+        return new OrderPrototype({ ...rest, id: undefined });
+      }
+
+      // convenience: compute total after discount
+      total() {
+        const itemsTotal = (this.items || []).reduce((s,i)=> s + (i.price * i.qty), 0);
+        if (this.offer && this.offer.discountPercent) {
+          const d = itemsTotal * (this.offer.discountPercent / 100);
+          return Math.round((itemsTotal - d) * 100) / 100;
+        }
+        return Math.round(itemsTotal * 100) / 100;
+      }
+    }
+
+    /*********************
+     * Sample past orders
+     *********************/
+    const pastOrderPrototypes = [
+      new OrderPrototype({
+        id: 'ord_01',
+        restaurant: 'The Spice House',
+        items: [
+          { name: 'Butter Chicken', qty: 1, price: 320 },
+          { name: 'Garlic Naan', qty: 2, price: 40 }
+        ],
+        offer: { code: 'SPICE10', discountPercent: 10 },
+        deliveryAddress: 'Flat 402, Sunbeam Apartments',
+        userNote: 'Extra butter on the chicken, please.'
+      }),
+      new OrderPrototype({
+        id: 'ord_02',
+        restaurant: 'Green Bowl (Healthy)',
+        items: [
+          { name: 'Quinoa Salad', qty: 1, price: 199 },
+          { name: 'Cold-pressed Juice', qty: 1, price: 99 }
+        ],
+        offer: null,
+        deliveryAddress: 'Flat 402, Sunbeam Apartments',
+        userNote: ''
+      }),
+      new OrderPrototype({
+        id: 'ord_03',
+        restaurant: 'Kathi Roll Express',
+        items: [
+          { name: 'Paneer Roll', qty: 2, price: 129 },
+          { name: 'Masala Fries', qty: 1, price: 89 }
+        ],
+        offer: { code: 'ROLL50', discountPercent: 5 },
+        deliveryAddress: 'Flat 402, Sunbeam Apartments',
+        userNote: 'No onion in rolls.'
+      })
+    ];
+
+    /*********************
+     * UI helpers
+     *********************/
+    const pastOrdersEl = document.getElementById('pastOrders');
+    const cartEl = document.getElementById('cart');
+    const totalEl = document.getElementById('total');
+    const placeOrderBtn = document.getElementById('placeOrderBtn');
+    const messageEl = document.getElementById('message');
+
+    function renderPastOrders() {
+      pastOrdersEl.innerHTML = '';
+      pastOrderPrototypes.forEach(proto => {
+        const orderDiv = document.createElement('div');
+        orderDiv.className = 'order';
+        orderDiv.innerHTML = `
+          <div class="order-info">
+            <div>
+              <div class="shop">${proto.restaurant} <span class="small pill">${proto.offer ? proto.offer.code : '—'}</span></div>
+              <div class="items">${proto.items.map(i=>`${i.name} x${i.qty}`).join(' • ')}</div>
+              <div class="small">Delivered to: ${proto.deliveryAddress}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div class="small">₹${proto.total()}</div>
+            <div style="margin-top:8px">
+              <button data-id="${proto.id}" class="reorderBtn">Reorder</button>
+            </div>
+          </div>
+        `;
+        pastOrdersEl.appendChild(orderDiv);
+      });
+
+      // attach handlers
+      Array.from(document.querySelectorAll('.reorderBtn')).forEach(btn => {
+        btn.addEventListener('click', e => {
+          const id = e.currentTarget.getAttribute('data-id');
+          const proto = pastOrderPrototypes.find(p=>p.id === id);
+          if (!proto) return;
+          const clone = proto.clone();
+          // allow user to edit a field to demonstrate independence of clone
+          clone.deliveryAddress = proto.deliveryAddress; // copy by value in clone
+          addToCart(clone);
+          messageEl.textContent = `Cloned from ${proto.restaurant} (${proto.id}). You can edit quantities or notes in the cart.`;
+        });
+      });
+    }
+
+    let cart = null; // holds the current cloned order (simple one-order cart for demo)
+
+    function addToCart(order) {
+      // This takes the cloned order and places it in "cart" UI.
+      cart = order;
+      renderCart();
+    }
+
+    function renderCart() {
+      cartEl.innerHTML = '';
+      if (!cart) {
+        cartEl.innerHTML = '<p class="muted">Cart is empty. Clone a past order to start.</p>';
+        totalEl.textContent = '₹0';
+        placeOrderBtn.disabled = true;
+        return;
+      }
+
+      // header
+      const hdr = document.createElement('div');
+      hdr.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${cart.restaurant}</strong></div><div class="small">Order prototype</div></div>`;
+      cartEl.appendChild(hdr);
+
+      // items
+      cart.items.forEach((it, idx) => {
+        const row = document.createElement('div');
+        row.style.display = 'flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='8px 0';
+        row.innerHTML = `
+          <div>
+            <div><strong>${it.name}</strong></div>
+            <div class="small">₹${it.price} each</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="number" min="0" value="${it.qty}" data-idx="${idx}" class="qtyInput" style="width:64px;padding:6px;border-radius:8px;border:1px solid #e5e7eb">
+            <div>₹${(it.price * it.qty).toFixed(2)}</div>
+          </div>
+        `;
+        cartEl.appendChild(row);
+      });
+
+      // offer / note / address
+      const offerDiv = document.createElement('div');
+      offerDiv.style.marginTop='8px';
+      offerDiv.innerHTML = `
+        <div class="small">Offer: ${cart.offer ? `${cart.offer.code} (${cart.offer.discountPercent}% off)` : '—'}</div>
+        <div class="small">Deliver to: <input id="addressInput" value="${cart.deliveryAddress}" style="width:100%;padding:6px;margin-top:6px;border-radius:6px;border:1px solid #eaeaea"></div>
+        <div style="margin-top:8px">
+          <div class="small">Note (editable):</div>
+          <textarea id="noteInput" style="width:100%;padding:8px;border-radius:8px;border:1px solid #eaeaea">${cart.userNote}</textarea>
+        </div>
+      `;
+      cartEl.appendChild(offerDiv);
+
+      // place/change handlers
+      Array.from(document.querySelectorAll('.qtyInput')).forEach(inp => {
+        inp.addEventListener('change', e => {
+          const idx = Number(e.target.getAttribute('data-idx'));
+          const val = Math.max(0, Math.floor(Number(e.target.value) || 0));
+          cart.items[idx].qty = val;
+          renderCart(); // rerender to update totals
+        });
+      });
+
+      document.getElementById('addressInput').addEventListener('change', e => {
+        cart.deliveryAddress = e.target.value;
+      });
+      document.getElementById('noteInput').addEventListener('change', e => {
+        cart.userNote = e.target.value;
+      });
+
+      // totals & buttons
+      totalEl.textContent = `₹${cart.total()}`;
+      placeOrderBtn.disabled = false;
+    }
+
+    placeOrderBtn.addEventListener('click', () => {
+      if (!cart) return;
+      // simulate placing order (in a real app you'd send the cart object to server)
+      messageEl.innerHTML = `Order placed from <strong>${cart.restaurant}</strong> for <strong>₹${cart.total()}</strong>. (Simulated)`;
+      placeOrderBtn.disabled = true;
+
+      // OPTIONAL: add this new order to past orders list as a new prototype (simulate order history).
+      const placedOrderProto = cart.clone ? cart.clone() : JSON.parse(JSON.stringify(cart));
+      // ensure unique id
+      placedOrderProto.id = `ord_${Math.random().toString(36).slice(2,7)}`;
+      pastOrderPrototypes.unshift(placedOrderProto);
+      cart = null;
+      renderPastOrders();
+      renderCart();
+    });
+
+    // init UI
+    renderPastOrders();
+  </script>
+</body>
+</html>
